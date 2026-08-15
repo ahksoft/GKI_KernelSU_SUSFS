@@ -67,13 +67,20 @@ runs:
         # the Image path below stays the same.
         if [[ "${{ inputs.version }}" == "android14-6.1" ]]; then
           TARGET="//common:kernel_aarch64"
+          # module_implicit_outs files are not in the default output group, but
+          # kleaf registers every declared output file as its own output group
+          # named by the module path. Request them so the .ko files are
+          # materialized in bazel-bin and build.yml can extract rtl8188fu.ko.
+          OUTGROUPS="--output_groups=+default,drivers/net/wireless/mac80211_hwsim.ko,drivers/net/wireless/realtek/rtl8188fu/rtl8188fu.ko,net/mac80211/mac80211.ko,net/wireless/cfg80211.ko"
         else
           TARGET="//common:kernel_aarch64/Image"
+          OUTGROUPS=""
         fi
         tools/bazel build \
           --config=fast \
           --config=stamp \
           --disk_cache=/home/runner/.cache/bazel \
+          ${OUTGROUPS} \
           "$TARGET"
       fi
 

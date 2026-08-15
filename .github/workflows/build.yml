@@ -399,7 +399,7 @@ jobs:
       working-directory: ${{ github.workspace }}
       run: |
         set -uo pipefail
-        KO_PATH="$(find "${{ github.workspace }}/kernel/bazel-bin" /home/runner/out -type f -name 'rtl8188fu.ko' 2>/dev/null | head -n1 || true)"
+        KO_PATH="$(find "${{ github.workspace }}/kernel/bazel-bin" "${{ github.workspace }}/kernel/bazel-out" /home/runner/out -type f -name 'rtl8188fu.ko' 2>/dev/null | head -n1 || true)"
         if [ -n "${KO_PATH:-}" ]; then
           cp "${KO_PATH}" "${{ github.workspace }}/AnyKernel3/rtl8188fu.ko"
           cp "${KO_PATH}" "${{ github.workspace }}/rtl8188fu.ko"
