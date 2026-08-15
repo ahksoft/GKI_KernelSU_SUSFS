@@ -117,7 +117,22 @@ def main() -> int:
     # 4) Absolute include paths for in-tree (kleaf) builds. The driver's own
     #    EXTRA_CFLAGS '-I$(src)/...' are relative to the objtree, which does
     #    not resolve inside the bazel out-of-tree objtree. Standalone M= builds
-    #    keep using the driver's own flags.
+    #    keep using the driver's own flags. Also disable -Werror for the module:
+    #    the old Realtek code trips clang warnings (uninitialized, header-guard)
+    #    that GKI turns into errors.
+    if "ccflags-y += -Wno-error" not in mk_src:
+        cc_anchor = "ccflags-y += $(EXTRA_CFLAGS)\n"
+        if cc_anchor not in mk_src:
+            print("error: ccflags-y anchor not found in Makefile", file=sys.stderr)
+            return 1
+        mk_src = mk_src.replace(
+            cc_anchor,
+            cc_anchor + "ccflags-y += -Wno-error\n",
+            1,
+        )
+        open(mk, "w").write(mk_src)
+        print("Makefile: added -Wno-error")
+
     if "KBUILD_EXTMOD" not in mk_src:
         inc_block = (
             "\n# In-tree (kleaf) builds: $(src) is relative to the objtree; use\n"
