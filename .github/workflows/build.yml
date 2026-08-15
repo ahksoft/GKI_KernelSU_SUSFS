@@ -204,6 +204,10 @@ jobs:
     - name: Setup Misc Configs
       uses: ./.github/actions/misc
 
+    - name: Setup RTL8188FU WiFi Driver + NetHunter Configs
+      if: ${{ inputs.version == 'android14-6.1' }}
+      uses: ./.github/actions/add-rtl8188fu
+
     - name: Enable BTF
       uses: ./.github/actions/btf
       with:
@@ -388,6 +392,22 @@ jobs:
       with:
         bypass: true
         version: ${{ inputs.version }}
+
+    - name: Extract RTL8188FU Module
+      if: ${{ inputs.version == 'android14-6.1' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        set -uo pipefail
+        KO_PATH="$(find "${{ github.workspace }}/kernel/bazel-bin" /home/runner/out -type f -name 'rtl8188fu.ko' 2>/dev/null | head -n1 || true)"
+        if [ -n "${KO_PATH:-}" ]; then
+          cp "${KO_PATH}" "${{ github.workspace }}/AnyKernel3/rtl8188fu.ko"
+          cp "${KO_PATH}" "${{ github.workspace }}/rtl8188fu.ko"
+          echo "rtl8188fu.ko copied to AnyKernel3 from ${KO_PATH}"
+          ls -l "${{ github.workspace }}/AnyKernel3/rtl8188fu.ko"
+        else
+          echo "::warning::rtl8188fu.ko not found in build output; module will not ship"
+        fi
 
     - name: 📋 Consolidated Build Summary
       if: ${{ always() }}

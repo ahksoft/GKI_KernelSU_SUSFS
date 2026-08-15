@@ -62,11 +62,19 @@ runs:
         if [ "${{ inputs.bypass }}" = "false" ]; then
           sed -i '/name = "kernel_aarch64",/a\    check_defconfig = "disabled",' common/BUILD.bazel
         fi
+        # Build the full kernel_build target for android14-6.1 so the
+        # in-tree modules (rtl8188fu.ko) are produced as exposed outputs;
+        # the Image path below stays the same.
+        if [[ "${{ inputs.version }}" == "android14-6.1" ]]; then
+          TARGET="//common:kernel_aarch64"
+        else
+          TARGET="//common:kernel_aarch64/Image"
+        fi
         tools/bazel build \
           --config=fast \
           --config=stamp \
           --disk_cache=/home/runner/.cache/bazel \
-          //common:kernel_aarch64/Image
+          "$TARGET"
       fi
 
   - name: 'Gather Build Artifacts'
