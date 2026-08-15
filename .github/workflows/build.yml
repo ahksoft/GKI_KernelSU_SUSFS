@@ -399,8 +399,14 @@ jobs:
       working-directory: ${{ github.workspace }}
       run: |
         set -uo pipefail
-        KO_PATH="$(find "${{ github.workspace }}/kernel/bazel-bin" "${{ github.workspace }}/kernel/bazel-out" /home/runner/out -type f -name 'rtl8188fu.ko' 2>/dev/null | head -n1 || true)"
-        if [ -n "${KO_PATH:-}" ]; then
+        # bazel-bin is a symlink into the bazel output base; find needs -L to
+        # descend into it. Prefer the exact materialized path (requested via the
+        # kleaf output group in build-kernel) and fall back to a broad search.
+        KO_PATH="${{ github.workspace }}/kernel/bazel-bin/common/kernel_aarch64/drivers/net/wireless/realtek/rtl8188fu/rtl8188fu.ko"
+        if [ ! -f "${KO_PATH}" ]; then
+          KO_PATH="$(find -L "${{ github.workspace }}/kernel/bazel-bin" "${{ github.workspace }}/kernel/bazel-out" /home/runner/out -type f -name 'rtl8188fu.ko' 2>/dev/null | head -n1 || true)"
+        fi
+        if [ -n "${KO_PATH:-}" ] && [ -f "${KO_PATH}" ]; then
           cp "${KO_PATH}" "${{ github.workspace }}/AnyKernel3/rtl8188fu.ko"
           cp "${KO_PATH}" "${{ github.workspace }}/rtl8188fu.ko"
           echo "rtl8188fu.ko copied to AnyKernel3 from ${KO_PATH}"
