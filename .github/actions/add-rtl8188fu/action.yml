@@ -32,6 +32,16 @@ runs:
         test -f "$DEST/Kconfig" && echo "Kconfig present"
         test -f "$DEST/Makefile" && echo "Makefile present"
 
+    - name: Embed RTL8188FU firmware into module
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        set -euo pipefail
+        DEST="drivers/net/wireless/realtek/rtl8188fu"
+        python3 "${{ github.action_path }}/embed_fw.py" "$DEST"
+        grep -n "CONFIG_RTL8188FU_EMBEDDED_FW" "$DEST/Makefile"
+        grep -n "embedded_fw" "$DEST/Makefile"
+
     - name: Wire driver into realtek Kconfig
       shell: bash
       working-directory: ${{ github.workspace }}/kernel/common
