@@ -79,9 +79,10 @@ environment/operational rules live in `/AGENTS.md` (container root). Key points:
 The `nethunter` branch builds a full kernel for the phone (`6.1.145-android14-Wild`) with the RTL8188FTV USB
 WiFi driver and NetHunter configs, instead of relying on the fragile on-device module build:
 
-- `.github/config/android14-6.1.json` is shrunk to **only sublevel 145 @ 2025-08** (the phone's os_patch_level,
-  pinned build timestamp `2025-08-05 04:20:00 UTC`). Select `kernel_build_version: android14-6.1` +
-  `feature_set: FULL` on the Actions page of this branch to build just that one kernel (Normal + Bypass).
+- `.github/config/android14-6.1.json` is shrunk to **only sublevel 145 @ 2025-08 and 2025-09** (the phone's
+  os_patch_level range; pinned build timestamp `2025-08-05 04:20:00 UTC`). Select
+  `kernel_build_version: android14-6.1` + `feature_set: FULL` on the Actions page of this branch to build
+  just those kernels (each cell builds Normal + Bypass).
 - `.github/actions/add-rtl8188fu/` clones `kelebek333/rtl8188fu` (pinned to `c8c9570`, power-saving off,
   monitor on), copies it in-tree to `drivers/net/wireless/realtek/rtl8188fu/` and wires it into the realtek
   Kconfig/Makefile. It also flips on via `set-kernel-config` (which patches `common/arch/arm64/configs/gki_defconfig`):
