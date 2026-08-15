@@ -114,6 +114,29 @@ def main() -> int:
         open(mk, "w").write(mk_src)
         print("Makefile: patched")
 
+    # 4) Absolute include paths for in-tree (kleaf) builds. The driver's own
+    #    EXTRA_CFLAGS '-I$(src)/...' are relative to the objtree, which does
+    #    not resolve inside the bazel out-of-tree objtree. Standalone M= builds
+    #    keep using the driver's own flags.
+    if "KBUILD_EXTMOD" not in mk_src:
+        inc_block = (
+            "\n# In-tree (kleaf) builds: $(src) is relative to the objtree; use\n"
+            "# absolute paths based on $(srctree) instead.\n"
+            "ifneq ($(KBUILD_EXTMOD),)\n"
+            "ccflags-y += -I$(M)/include -I$(M)/hal/phydm -I$(M)/hal/btc\n"
+            "else\n"
+            "ccflags-y += -I$(srctree)/$(src)/include -I$(srctree)/$(src)/hal/phydm -I$(srctree)/$(src)/hal/btc\n"
+            "endif\n"
+        )
+        cc_anchor = "ccflags-y += $(EXTRA_CFLAGS)\n"
+        if cc_anchor not in mk_src:
+            print("error: ccflags-y anchor not found in Makefile", file=sys.stderr)
+            return 1
+        mk_src = open(mk).read()
+        mk_src = mk_src.replace(cc_anchor, cc_anchor + inc_block, 1)
+        open(mk, "w").write(mk_src)
+        print("Makefile: added in-tree include paths")
+
     print("done")
     return 0
 
