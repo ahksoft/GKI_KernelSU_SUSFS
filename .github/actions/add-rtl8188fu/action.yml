@@ -42,6 +42,16 @@ runs:
         grep -n "CONFIG_RTL8188FU_EMBEDDED_FW" "$DEST/Makefile"
         grep -n "embedded_fw" "$DEST/Makefile"
 
+    - name: Fix driver Kconfig syntax
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        set -euo pipefail
+        KCFG="drivers/net/wireless/realtek/rtl8188fu/Kconfig"
+        # '---help---' was removed from kconfig; modern kernels only accept 'help'.
+        sed -i 's/^[[:space:]]*---help---$/	help/' "$KCFG"
+        grep -n "help" "$KCFG"
+
     - name: Wire driver into realtek Kconfig
       shell: bash
       working-directory: ${{ github.workspace }}/kernel/common
