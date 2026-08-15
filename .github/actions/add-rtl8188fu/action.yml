@@ -76,6 +76,14 @@ runs:
         fi
         tail -n 3 "$MK"
 
+    - name: Register wireless modules with kleaf (modules.bzl)
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        set -euo pipefail
+        python3 "${{ github.action_path }}/register_modules.py" modules.bzl
+        grep -n 'rtl8188fu.ko\|mac80211_hwsim.ko\|"net/wireless/cfg80211.ko"\|"net/mac80211/mac80211.ko"' modules.bzl
+
     - name: Enable driver + wireless configs
       uses: ./.github/actions/set-kernel-config
       with:
