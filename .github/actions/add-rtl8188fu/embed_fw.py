@@ -152,6 +152,36 @@ def main() -> int:
         open(mk, "w").write(mk_src)
         print("Makefile: added in-tree include paths")
 
+    # 5) Fix known clang -Werror bugs in the driver source (GKI builds with
+    #    Werror). These are real bugs, not just warnings:
+    #    - rtw_recv.h: get_rxbuf_desc()/pkt_to_recvframe() return pointers that
+    #      are only assigned inside '#ifdef PLATFORM_WINDOWS', so on Linux they
+    #      are used uninitialized.
+    #    - phydm_features.h: #define guard name doesn't match the #ifndef guard.
+    #    '-Wno-error' (section 4) is kept as a safety net for any other old
+    #    Realtek warnings under clang.
+    recv = os.path.join(d, "include", "rtw_recv.h")
+    recv_src = open(recv).read()
+    if "_buffer * buf_desc = NULL;" not in recv_src:
+        recv_src = recv_src.replace(
+            "_buffer * buf_desc;", "_buffer * buf_desc = NULL;", 1
+        )
+        open(recv, "w").write(recv_src)
+        print("rtw_recv.h: fixed get_rxbuf_desc() uninitialized buf_desc")
+    if "u8 * buf_star = NULL;" not in recv_src:
+        recv_src = recv_src.replace(
+            "u8 * buf_star;", "u8 * buf_star = NULL;", 1
+        )
+        open(recv, "w").write(recv_src)
+        print("rtw_recv.h: fixed pkt_to_recvframe() uninitialized buf_star")
+
+    feat = os.path.join(d, "hal", "phydm", "phydm_features.h")
+    feat_src = open(feat).read()
+    if "#define __PHYDM_FEATURES_H__\n" not in feat_src:
+        feat_src = feat_src.replace("#define __PHYDM_FEATURES\n", "#define __PHYDM_FEATURES_H__\n", 1)
+        open(feat, "w").write(feat_src)
+        print("phydm_features.h: fixed header guard mismatch")
+
     print("done")
     return 0
 

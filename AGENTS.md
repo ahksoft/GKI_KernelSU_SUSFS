@@ -85,14 +85,22 @@ WiFi driver and NetHunter configs, instead of relying on the fragile on-device m
   just those kernels (each cell builds Normal + Bypass).
 - `.github/actions/add-rtl8188fu/` clones `kelebek333/rtl8188fu` (pinned to `c8c9570`, power-saving off,
   monitor on), copies it in-tree to `drivers/net/wireless/realtek/rtl8188fu/` and wires it into the realtek
-  Kconfig/Makefile. Three fixes are applied before building:
+  Kconfig/Makefile. Four fixes are applied before building:
   1. The driver's `Kconfig` uses `---help---`, which kconfig rejects on 6.1 — rewritten to `help`.
   2. `embed_fw.py` embeds `rtlwifi/rtl8188fufw.bin` into the module (`embedded_fw.c` +
      `CONFIG_RTL8188FU_EMBEDDED_FW`), so `rtl8188f_FirmwareDownload()` skips `request_firmware()` and uses
      the embedded copy. This is required on Android: `/vendor/firmware` is read-only, there is no
      `/lib/firmware`, and `FW_LOADER_USER_HELPER_FALLBACK` is disabled, so runtime firmware loading would
      fail. The `.ko` is fully self-contained.
-  3. `set-kernel-config` (which patches `common/arch/arm64/configs/gki_defconfig`) flips on:
+  3. `embed_fw.py` also fixes compile/`-Werror` issues exposed by the kleaf build:
+     - the driver's own `EXTRA_CFLAGS` include paths are relative (`-I$(src)/...`) and don't resolve inside
+       the bazel out-of-tree objtree — it appends an in-tree `ccflags-y` block with `-I$(srctree)/$(src)/...`
+       absolute paths (and `-I$(M)/...` for standalone `M=` builds);
+     - adds `ccflags-y += -Wno-error` (GKI builds with `-Werror`; old Realtek code trips clang warnings);
+     - `include/rtw_recv.h`: `get_rxbuf_desc()`/`pkt_to_recvframe()` returned uninitialized pointers on
+       Linux (only assigned inside `#ifdef PLATFORM_WINDOWS`) — now initialized to `NULL`;
+     - `hal/phydm/phydm_features.h`: `#define` guard didn't match `#ifndef` guard (`-Wheader-guard`).
+  4. `set-kernel-config` (which patches `common/arch/arm64/configs/gki_defconfig`) flips on:
   `CONFIG_WLAN_VENDOR_REALTEK=y` (required: `obj-$(CONFIG_WLAN_VENDOR_REALTEK)` in `drivers/net/wireless/Makefile`
   gates descent into `realtek/`), `CONFIG_RTL8188FU=m`, `CONFIG_CFG80211=m`, `CONFIG_NL80211_TESTMODE=y`,
   `CONFIG_CFG80211_CERTIFICATION_ONUS=y`, `CONFIG_CFG80211_REG_CELLULAR_HINTS=y`, `CONFIG_MAC80211=m`,
