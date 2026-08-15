@@ -205,8 +205,9 @@ jobs:
       uses: ./.github/actions/misc
 
     - name: Setup RTL8188FU WiFi Driver + NetHunter Configs
-      if: ${{ inputs.version == 'android14-6.1' }}
       uses: ./.github/actions/add-rtl8188fu
+      with:
+        version: ${{ inputs.version }}
 
     - name: Enable BTF
       uses: ./.github/actions/btf
@@ -394,7 +395,6 @@ jobs:
         version: ${{ inputs.version }}
 
     - name: Extract RTL8188FU Module
-      if: ${{ inputs.version == 'android14-6.1' }}
       shell: bash
       working-directory: ${{ github.workspace }}
       run: |
@@ -402,18 +402,25 @@ jobs:
         # bazel-bin is a symlink into the bazel output base; find needs -L to
         # descend into it. Prefer the exact materialized path (requested via the
         # kleaf output group in build-kernel) and fall back to a broad search.
-        KO_PATH="${{ github.workspace }}/kernel/bazel-bin/common/kernel_aarch64/drivers/net/wireless/realtek/rtl8188fu/rtl8188fu.ko"
-        if [ ! -f "${KO_PATH}" ]; then
-          KO_PATH="$(find -L "${{ github.workspace }}/kernel/bazel-bin" "${{ github.workspace }}/kernel/bazel-out" /home/runner/out -type f -name 'rtl8188fu.ko' 2>/dev/null | head -n1 || true)"
-        fi
-        if [ -n "${KO_PATH:-}" ] && [ -f "${KO_PATH}" ]; then
-          cp "${KO_PATH}" "${{ github.workspace }}/AnyKernel3/rtl8188fu.ko"
-          cp "${KO_PATH}" "${{ github.workspace }}/rtl8188fu.ko"
-          echo "rtl8188fu.ko copied to AnyKernel3 from ${KO_PATH}"
-          ls -l "${{ github.workspace }}/AnyKernel3/rtl8188fu.ko"
-        else
-          echo "::warning::rtl8188fu.ko not found in build output; module will not ship"
-        fi
+        # On legacy build.sh versions the .ko lands under /home/runner/out.
+        BIN="${{ github.workspace }}/kernel/bazel-bin"
+        cp_module() {
+          local rel="$1" out="$2"
+          local p="$BIN/common/kernel_aarch64/$rel"
+          if [ ! -f "$p" ]; then
+            p="$(find -L "$BIN" "${{ github.workspace }}/kernel/bazel-out" /home/runner/out -type f -path "*${rel}" 2>/dev/null | head -n1 || true)"
+          fi
+          if [ -n "${p:-}" ] && [ -f "$p" ]; then
+            cp "$p" "$out"
+            echo "copied ${rel} from $p"
+          else
+            echo "::warning::${rel} not found in build output; module will not ship"
+          fi
+        }
+        cp_module "drivers/net/wireless/realtek/rtl8188fu/rtl8188fu.ko" "${{ github.workspace }}/AnyKernel3/rtl8188fu.ko"
+        cp_module "net/wireless/cfg80211.ko" "${{ github.workspace }}/AnyKernel3/cfg80211.ko"
+        cp_module "net/mac80211/mac80211.ko" "${{ github.workspace }}/AnyKernel3/mac80211.ko"
+        ls -l "${{ github.workspace }}/AnyKernel3/"*.ko 2>/dev/null || true
 
     - name: 📋 Consolidated Build Summary
       if: ${{ always() }}

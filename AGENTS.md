@@ -76,7 +76,7 @@ environment/operational rules live in `/AGENTS.md` (container root). Key points:
 
 ## NetHunter branch (nethunter) — RTL8188FU + NetHunter kernel via CI
 
-The `nethunter` branch builds a full kernel for the phone (`6.1.145-android14-Wild`) with the RTL8188FTV USB
+The `nethunter` branch builds a full kernel for the phone (`6.1.145-android14-AHK-Fire`) with the RTL8188FTV USB
 WiFi driver and NetHunter configs, instead of relying on the fragile on-device module build:
 
 - `.github/config/android14-6.1.json` is shrunk to **only sublevel 145 @ 2025-08 and 2025-09** (the phone's
@@ -85,7 +85,7 @@ WiFi driver and NetHunter configs, instead of relying on the fragile on-device m
   just those kernels (each cell builds Normal + Bypass).
 - `.github/actions/add-rtl8188fu/` clones `kelebek333/rtl8188fu` (pinned to `c8c9570`, power-saving off,
   monitor on), copies it in-tree to `drivers/net/wireless/realtek/rtl8188fu/` and wires it into the realtek
-  Kconfig/Makefile. Four fixes are applied before building:
+  Kconfig/Makefile. Five fixes are applied before building:
   1. The driver's `Kconfig` uses `---help---`, which kconfig rejects on 6.1 — rewritten to `help`.
   2. `embed_fw.py` embeds `rtlwifi/rtl8188fufw.bin` into the module (`embedded_fw.c` +
      `CONFIG_RTL8188FU_EMBEDDED_FW`), so `rtl8188f_FirmwareDownload()` skips `request_firmware()` and uses
@@ -100,19 +100,29 @@ WiFi driver and NetHunter configs, instead of relying on the fragile on-device m
      - `include/rtw_recv.h`: `get_rxbuf_desc()`/`pkt_to_recvframe()` returned uninitialized pointers on
        Linux (only assigned inside `#ifdef PLATFORM_WINDOWS`) — now initialized to `NULL`;
      - `hal/phydm/phydm_features.h`: `#define` guard didn't match `#ifndef` guard (`-Wheader-guard`).
-  4. `set-kernel-config` (which patches `common/arch/arm64/configs/gki_defconfig`) flips on:
+  4. `register_modules.py` registers cfg80211/mac80211/mac80211_hwsim/rtl8188fu with kleaf (modules.bzl or
+     BUILD.bazel inline `module_implicit_outs`, auto-detected) so the "built but not copied" check passes.
+  5. `set-kernel-config` (which patches `common/arch/arm64/configs/gki_defconfig`) flips on:
   `CONFIG_WLAN_VENDOR_REALTEK=y` (required: `obj-$(CONFIG_WLAN_VENDOR_REALTEK)` in `drivers/net/wireless/Makefile`
   gates descent into `realtek/`), `CONFIG_RTL8188FU=m`, `CONFIG_CFG80211=m`, `CONFIG_NL80211_TESTMODE=y`,
   `CONFIG_CFG80211_CERTIFICATION_ONUS=y`, `CONFIG_CFG80211_REG_CELLULAR_HINTS=y`, `CONFIG_MAC80211=m`,
   `CONFIG_MAC80211_HWSIM=m`. GKI defconfig already ships most other NetHunter configs (TPROXY, MATCH_MAC,
   VLAN_8021Q, BT_HIDP, UINPUT, UHID).
-- The action + module-extraction step are gated to `inputs.version == 'android14-6.1'` only.
-- **Bazel/kleaf** is used for android14-6.1 (manifest includes `build/bazel_common_rules` + bazel prebuilts,
-  NOT `build/build.sh`). `build-kernel` therefore builds the full `//common:kernel_aarch64` target for
-  android14-6.1 (instead of `//common:kernel_aarch64/Image`) so the in-tree modules are exposed as outputs;
-  `Image` still lands at `bazel-bin/common/kernel_aarch64/Image`. The extracted `rtl8188fu.ko` is copied into
-  the AnyKernel3 zip and uploaded with the build artifacts.
-- The phone's running kernel has `CONFIG_CFG80211 is not set` in-tree; its cfg80211/mac80211/bcmdhd modules
-  load from the ROM's vendor_boot. The built `rtl8188fu.ko` carries proper modversions CRCs computed against
-  the same 6.1.145 source, so it resolves cleanly against the vendor_boot cfg80211 module after flashing.
+- The action + module-extraction step run for **all** versions. kleaf versions register the modules in
+  `modules.bzl` (`_COMMON_GKI_MODULES_LIST`, anchors `usbnet.ko`/`l2tp_ppp.ko`/`tipc.ko` — present on
+  android14-5.15, android14-6.1, android15-6.6, android16-6.12) or inline `module_implicit_outs` in
+  `BUILD.bazel` (android13-5.15, handled by `register_modules.py` auto-detection); legacy android12/13-5.10
+  (build.sh) need no registration. Config: on kleaf versions cfg80211/mac80211/mac80211_hwsim are set to `=m`
+  (stock GKI has `# CONFIG_CFG80211 is not set`); on 5.10 they stay built-in (`=y`) so vendor WiFi modules
+  keep resolving cfg80211 symbols.
+- **Bazel/kleaf** is used for android13-5.15 … android16-6.12 (manifest includes `build/bazel_common_rules` +
+  bazel prebuilts, NOT `build/build.sh`). `build-kernel` therefore builds the full `//common:kernel_aarch64`
+  target for all kleaf versions (instead of `//common:kernel_aarch64/Image`) so the in-tree modules are
+  exposed as outputs; `Image` still lands at `bazel-bin/common/kernel_aarch64/Image`. The extracted
+  `rtl8188fu.ko` (plus `cfg80211.ko`/`mac80211.ko` when built as modules) is copied into the AnyKernel3 zip
+  and uploaded with the build artifacts.
+- The **stock** Wild kernel has `CONFIG_CFG80211 is not set` in-tree (bcmdhd is self-contained); its
+  cfg80211/mac80211/bcmdhd modules load from the ROM's vendor_boot. Our build enables cfg80211/mac80211 as
+  modules, so the built `rtl8188fu.ko` carries proper modversions CRCs computed against the same 6.1.145
+  source and resolves cleanly against the vendor_boot cfg80211 module after flashing.
 - Firmware is embedded in `rtl8188fu.ko` (see fix #2 above) — no phone-side firmware file is needed.

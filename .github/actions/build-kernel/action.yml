@@ -62,10 +62,10 @@ runs:
         if [ "${{ inputs.bypass }}" = "false" ]; then
           sed -i '/name = "kernel_aarch64",/a\    check_defconfig = "disabled",' common/BUILD.bazel
         fi
-        # Build the full kernel_build target for android14-6.1 so the
-        # in-tree modules (rtl8188fu.ko) are produced as exposed outputs;
-        # the Image path below stays the same.
-        if [[ "${{ inputs.version }}" == "android14-6.1" ]]; then
+        # Build the full kernel_build target for kleaf-based versions so the
+        # in-tree modules (rtl8188fu.ko) are produced as exposed outputs; the
+        # Image path below stays the same.
+        if [[ " android13-5.15 android14-5.15 android14-6.1 android15-6.6 android16-6.12 android17-6.18 " == *" ${{ inputs.version }} "* ]]; then
           TARGET="//common:kernel_aarch64"
           # module_implicit_outs files are not in the default output group, but
           # kleaf registers every declared output file as its own output group

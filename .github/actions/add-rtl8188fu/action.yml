@@ -1,6 +1,11 @@
 name: 'Add RTL8188FU WiFi Driver'
 description: 'Integrate the Realtek RTL8188FTV (rtl8188fu) driver into the kernel tree and enable cfg80211/mac80211 + NetHunter configs'
 
+inputs:
+  version:
+    description: 'Kernel config version (e.g., android14-6.1)'
+    required: true
+
 runs:
   using: "composite"
   steps:
@@ -76,15 +81,16 @@ runs:
         fi
         tail -n 3 "$MK"
 
-    - name: Register wireless modules with kleaf (modules.bzl)
+    - name: Register wireless modules with kleaf (modules.bzl / BUILD.bazel)
       shell: bash
       working-directory: ${{ github.workspace }}/kernel/common
       run: |
         set -euo pipefail
-        python3 "${{ github.action_path }}/register_modules.py" modules.bzl
-        grep -n 'rtl8188fu.ko\|mac80211_hwsim.ko\|"net/wireless/cfg80211.ko"\|"net/mac80211/mac80211.ko"' modules.bzl
+        python3 "${{ github.action_path }}/register_modules.py" .
+        grep -n 'rtl8188fu.ko' modules.bzl BUILD.bazel 2>/dev/null || true
 
-    - name: Enable driver + wireless configs
+    - name: Enable driver + wireless configs (kleaf versions)
+      if: ${{ !(inputs.version == 'android12-5.10' || inputs.version == 'android13-5.10') }}
       uses: ./.github/actions/set-kernel-config
       with:
         config_list: |
@@ -96,3 +102,14 @@ runs:
           CONFIG_CFG80211_REG_CELLULAR_HINTS=y
           CONFIG_MAC80211=m
           CONFIG_MAC80211_HWSIM=m
+
+    - name: Enable driver + wireless configs (5.10 build.sh; cfg80211/mac80211 stay built-in)
+      if: ${{ inputs.version == 'android12-5.10' || inputs.version == 'android13-5.10' }}
+      uses: ./.github/actions/set-kernel-config
+      with:
+        config_list: |
+          CONFIG_WLAN_VENDOR_REALTEK=y
+          CONFIG_RTL8188FU=m
+          CONFIG_NL80211_TESTMODE=y
+          CONFIG_CFG80211_CERTIFICATION_ONUS=y
+          CONFIG_CFG80211_REG_CELLULAR_HINTS=y
