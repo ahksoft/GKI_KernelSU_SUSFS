@@ -100,8 +100,12 @@ WiFi driver and NetHunter configs, instead of relying on the fragile on-device m
      - `include/rtw_recv.h`: `get_rxbuf_desc()`/`pkt_to_recvframe()` returned uninitialized pointers on
        Linux (only assigned inside `#ifdef PLATFORM_WINDOWS`) — now initialized to `NULL`;
      - `hal/phydm/phydm_features.h`: `#define` guard didn't match `#ifndef` guard (`-Wheader-guard`).
-  4. `register_modules.py` registers cfg80211/mac80211/mac80211_hwsim/rtl8188fu with kleaf (modules.bzl or
-     BUILD.bazel inline `module_implicit_outs`, auto-detected) so the "built but not copied" check passes.
+  4. `register_modules.py` registers the NetHunter wireless modules with kleaf
+     (sorted merge into `_COMMON_GKI_MODULES_LIST` in modules.bzl or inline
+     `module_implicit_outs` in BUILD.bazel, auto-detected) so the "built but
+     not copied" check passes. Modules: cfg80211, mac80211, mac80211_hwsim,
+     rtl8188fu plus the in-tree toolbox (ath9k_htc, rt2800usb, rtl8xxxu,
+     mt7601u, rndis_host, cdc_ether, cdc_mbim). Idempotent.
   5. `set-kernel-config` (which patches `common/arch/arm64/configs/gki_defconfig`) flips on:
   `CONFIG_WLAN_VENDOR_REALTEK=y` (required: `obj-$(CONFIG_WLAN_VENDOR_REALTEK)` in `drivers/net/wireless/Makefile`
   gates descent into `realtek/`), `CONFIG_RTL8188FU=m`, `CONFIG_CFG80211=m`, `CONFIG_NL80211_TESTMODE=y`,
@@ -112,8 +116,12 @@ WiFi driver and NetHunter configs, instead of relying on the fragile on-device m
   NetHunter bits the GKI defconfig lacks: `CONFIG_WIRELESS_EXT=y` (legacy WEXT ioctls for monitor-mode
   tooling; safe alongside `CFG80211=m`), `CONFIG_USBIP_CORE=y`/`CONFIG_USBIP_VHCI_HCD=y`/`CONFIG_USBIP_HOST=y`
   (USB/IP), `CONFIG_USB_CONFIGFS_F_RNDIS=y` (RNDIS gadget), `CONFIG_IP_NF_TARGET_TEE=y` (classic
-  `iptables -j TEE`). `set-kernel-config` appends to `gki_defconfig`; `olddefconfig` silently drops any
-  symbol that does not exist on a given kernel version, so the same list is safe for 5.10→6.12.
+  `iptables -j TEE`), plus the in-tree wireless toolbox as modules: `CONFIG_ATH9K_HTC=m` (USB 9271),
+  `CONFIG_RT2800USB=m` (rt2x00 USB), `CONFIG_RTL8XXXU=m` + `CONFIG_RTL8XXXU_UNTESTED=y` (in-tree generic
+  8188/8192/8723/8811/8812/8821, incl. the 8188FU chip), `CONFIG_MT7601U=m`, `CONFIG_USB_NET_RNDIS_HOST=m`,
+  `CONFIG_USB_NET_CDC_ETHER=m`, `CONFIG_USB_NET_CDC_MBIM=m`. `set-kernel-config` appends to `gki_defconfig`;
+  `olddefconfig` silently drops any symbol that does not exist on a given kernel version, so the same list
+  is safe for 5.10→6.12. All in-tree toolbox modules are registered (kleaf) and extracted into the zip.
 - The action + module-extraction step run for **all** versions. kleaf versions register the modules in
   `modules.bzl` (`_COMMON_GKI_MODULES_LIST`, anchors `usbnet.ko`/`l2tp_ppp.ko`/`tipc.ko` — present on
   android14-5.15, android14-6.1, android15-6.6, android16-6.12) or inline `module_implicit_outs` in

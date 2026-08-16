@@ -6,45 +6,41 @@ in module_outs/module_implicit_outs ("built but not copied"). The
 define_common_kernels target_configs in common/BUILD.bazel only supports
 module_implicit_outs, which is sourced either from get_gki_modules_list()
 (_COMMON_GKI_MODULES_LIST in modules.bzl) or written inline in BUILD.bazel.
-This script appends the modules this action enables (cfg80211, mac80211,
-mac80211_hwsim, rtl8188fu) to whichever form the checked-out kernel uses.
+This script merges the modules this action enables (cfg80211, mac80211,
+mac80211_hwsim, rtl8188fu and the in-tree NetHunter wireless toolbox) into
+whichever form the checked-out kernel uses, keeping the list sorted.
 
 Handled layouts:
   * modules.bzl with _COMMON_GKI_MODULES_LIST (android14-5.15, android14-6.1,
-    android15-6.6, android16-6.12, android17-6.18): anchor-insert at the
-    same positions as the android14-6.1 list (usbnet.ko, l2tp_ppp.ko,
-    tipc.ko), falling back to sorted insertion if an anchor is missing.
+    android15-6.6, android16-6.12, android17-6.18): sorted merge.
   * BUILD.bazel with inline "module_implicit_outs": [...] lists
-    (android13-5.15): insert into every such list, keeping it sorted.
+    (android13-5.15): sorted merge into every such list.
   * Neither (android12/13-5.10 legacy build.sh): nothing to do.
 
-Idempotent: safe to run repeatedly.
+Idempotent: safe to run repeatedly (skips when the marker is already present).
 """
 import os
 import re
 import sys
 
 ADDS = [
+    # NetHunter wireless modules (cfg80211/mac80211/rtl8188fu + in-tree toolbox)
+    "drivers/net/usb/cdc_ether.ko",
+    "drivers/net/usb/cdc_mbim.ko",
+    "drivers/net/usb/rndis_host.ko",
+    "drivers/net/wireless/ath/ath9k/ath9k_common.ko",
+    "drivers/net/wireless/ath/ath9k/ath9k_htc.ko",
+    "drivers/net/wireless/ath/ath9k/ath9k_hw.ko",
     "drivers/net/wireless/mac80211_hwsim.ko",
+    "drivers/net/wireless/mediatek/mt7601u/mt7601u.ko",
+    "drivers/net/wireless/ralink/rt2x00/rt2800lib.ko",
+    "drivers/net/wireless/ralink/rt2x00/rt2800usb.ko",
+    "drivers/net/wireless/ralink/rt2x00/rt2x00lib.ko",
+    "drivers/net/wireless/ralink/rt2x00/rt2x00usb.ko",
+    "drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu.ko",
     "drivers/net/wireless/realtek/rtl8188fu/rtl8188fu.ko",
     "net/mac80211/mac80211.ko",
     "net/wireless/cfg80211.ko",
-]
-
-ANCHORS = [
-    (
-        '    "drivers/net/usb/usbnet.ko",\n',
-        '    "drivers/net/wireless/mac80211_hwsim.ko",\n'
-        '    "drivers/net/wireless/realtek/rtl8188fu/rtl8188fu.ko",\n',
-    ),
-    (
-        '    "net/l2tp/l2tp_ppp.ko",\n',
-        '    "net/mac80211/mac80211.ko",\n',
-    ),
-    (
-        '    "net/tipc/tipc.ko",\n',
-        '    "net/wireless/cfg80211.ko",\n',
-    ),
 ]
 
 MARKER = "rtl8188fu.ko"
@@ -57,12 +53,12 @@ _IMPLICIT_OUTS_RE = re.compile(
 )
 
 
-def _module_paths(text: str) -> list:
-    return re.findall(r'"((?:drivers|net|mm|crypto)/[^"]+\.ko)"', text)
-
-
 def _sorted_insert(text: str) -> str:
-    """Insert ADDS at sorted positions inside a "[...]" list body."""
+    """Insert ADDS at sorted positions inside a "[...]" list body.
+
+    Re-emits the whole body so the result stays "keep sorted" regardless of
+    whether any anchor was present.
+    """
     entries = re.findall(r'\n(\s*)"([^"]+\.ko)",', text)
     existing = {name for _, name in entries}
     merged = sorted(existing | set(ADDS))
@@ -70,71 +66,50 @@ def _sorted_insert(text: str) -> str:
     return "\n" + "\n".join(f'{ind}"{name}",' for name in merged)
 
 
-def patch_modules_bzl(path: str, s: str) -> bool:
-    if MARKER in s:
-        print(f"{path}: already patched")
-        return True
-    ok = True
-    for anchor, ins in ANCHORS:
-        if anchor not in s:
-            print(f"{path}: anchor missing ({anchor.strip()}), using sorted "
-                  f"insertion", file=sys.stderr)
-            ok = False
-            break
-        s = s.replace(anchor, anchor + ins, 1)
-    if not ok:
-        m = _MODULE_LIST_RE.search(s)
-        if not m:
-            print(f"{path}: no _COMMON_GKI_MODULES_LIST found", file=sys.stderr)
-            return False
-        s = s[:m.start(1)] + m.group(1) + _sorted_insert(m.group(2)) + m.group(3) + s[m.end(3):]
-    open(path, "w").write(s)
-    print(f"{path}: registered wireless modules with kleaf (modules.bzl)")
-    return True
-
-
-def patch_build_bazel(path: str, s: str) -> bool:
-    if MARKER in s:
-        print(f"{path}: already patched")
-        return True
+def _patch_list(text: str, regex: re.Pattern) -> int:
+    """Sorted-merge ADDS into every match of `regex`; returns match count."""
     def _repl(m):
         return m.group(1) + _sorted_insert(m.group(2)) + m.group(3)
-    s2, n = _IMPLICIT_OUTS_RE.subn(_repl, s)
-    if n == 0:
-        print(f"{path}: no inline 'module_implicit_outs' list found",
-              file=sys.stderr)
-        return False
-    open(path, "w").write(s2)
-    print(f"{path}: registered wireless modules with kleaf ({n} "
-          f"module_implicit_outs list(s) updated)")
-    return True
+    text, n = regex.subn(_repl, text)
+    return n, text
 
 
 def main() -> int:
     target = "."
     if len(sys.argv) == 2:
         target = sys.argv[1]
-    if len(sys.argv) > 2:
+    elif len(sys.argv) > 2:
         print("usage: register_modules.py [<dir-or-file>]", file=sys.stderr)
         return 1
     p = os.path.abspath(target)
     if os.path.isdir(p):
-        mods = os.path.join(p, "modules.bzl")
-        bazel = os.path.join(p, "BUILD.bazel")
-        if os.path.isfile(mods):
-            return 0 if patch_modules_bzl(mods, open(mods).read()) else 1
-        if os.path.isfile(bazel):
-            return 0 if patch_build_bazel(bazel, open(bazel).read()) else 1
-        print(f"{p}: no modules.bzl/BUILD.bazel kleaf module list found "
-              f"(legacy build.sh?); nothing to register")
+        candidates = [(os.path.join(p, "modules.bzl"), _MODULE_LIST_RE),
+                      (os.path.join(p, "BUILD.bazel"), _IMPLICIT_OUTS_RE)]
+    elif os.path.isfile(p):
+        candidates = [(p, _MODULE_LIST_RE), (p, _IMPLICIT_OUTS_RE)]
+    else:
+        print(f"{p}: not found", file=sys.stderr)
+        return 1
+
+    for path, regex in candidates:
+        if not os.path.isfile(path):
+            continue
+        s = open(path).read()
+        if MARKER in s:
+            print(f"{path}: already patched")
+            return 0
+        n, s2 = _patch_list(s, regex)
+        if n == 0:
+            print(f"{path}: no '{regex.pattern[:30]}' match; "
+                  f"trying other kleaf list form", file=sys.stderr)
+            continue
+        open(path, "w").write(s2)
+        print(f"{path}: registered wireless modules with kleaf "
+              f"({n} list(s) updated)")
         return 0
-    if os.path.isfile(p):
-        s = open(p).read()
-        if "_COMMON_GKI_MODULES_LIST" in s:
-            return 0 if patch_modules_bzl(p, s) else 1
-        return 0 if patch_build_bazel(p, s) else 1
-    print(f"{p}: not found", file=sys.stderr)
-    return 1
+    print(f"{p}: no modules.bzl/BUILD.bazel kleaf module list found "
+          f"(legacy build.sh?); nothing to register")
+    return 0
 
 
 if __name__ == "__main__":
