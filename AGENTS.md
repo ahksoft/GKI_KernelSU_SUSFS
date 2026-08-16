@@ -107,7 +107,13 @@ WiFi driver and NetHunter configs, instead of relying on the fragile on-device m
   gates descent into `realtek/`), `CONFIG_RTL8188FU=m`, `CONFIG_CFG80211=m`, `CONFIG_NL80211_TESTMODE=y`,
   `CONFIG_CFG80211_CERTIFICATION_ONUS=y`, `CONFIG_CFG80211_REG_CELLULAR_HINTS=y`, `CONFIG_MAC80211=m`,
   `CONFIG_MAC80211_HWSIM=m`. GKI defconfig already ships most other NetHunter configs (TPROXY, MATCH_MAC,
-  VLAN_8021Q, BT_HIDP, UINPUT, UHID).
+  VLAN_8021Q, BT_HIDP, UINPUT, UHID, USB_CONFIGFS_F_HID/F_UVC, NETFILTER_XT_TARGET_TEE/NFQUEUE, BLK_DEV_LOOP).
+- A separate `Enable NetHunter Kernel Configs` step (all versions, after `add-rtl8188fu`) adds the few
+  NetHunter bits the GKI defconfig lacks: `CONFIG_WIRELESS_EXT=y` (legacy WEXT ioctls for monitor-mode
+  tooling; safe alongside `CFG80211=m`), `CONFIG_USBIP_CORE=y`/`CONFIG_USBIP_VHCI_HCD=y`/`CONFIG_USBIP_HOST=y`
+  (USB/IP), `CONFIG_USB_CONFIGFS_F_RNDIS=y` (RNDIS gadget), `CONFIG_IP_NF_TARGET_TEE=y` (classic
+  `iptables -j TEE`). `set-kernel-config` appends to `gki_defconfig`; `olddefconfig` silently drops any
+  symbol that does not exist on a given kernel version, so the same list is safe for 5.10→6.12.
 - The action + module-extraction step run for **all** versions. kleaf versions register the modules in
   `modules.bzl` (`_COMMON_GKI_MODULES_LIST`, anchors `usbnet.ko`/`l2tp_ppp.ko`/`tipc.ko` — present on
   android14-5.15, android14-6.1, android15-6.6, android16-6.12) or inline `module_implicit_outs` in

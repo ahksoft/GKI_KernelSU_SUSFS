@@ -204,10 +204,21 @@ jobs:
     - name: Setup Misc Configs
       uses: ./.github/actions/misc
 
-    - name: Setup RTL8188FU WiFi Driver + NetHunter Configs
+    - name: Setup RTL8188FU WiFi Driver
       uses: ./.github/actions/add-rtl8188fu
       with:
         version: ${{ inputs.version }}
+
+    - name: Enable NetHunter Kernel Configs
+      uses: ./.github/actions/set-kernel-config
+      with:
+        config_list: |
+          CONFIG_WIRELESS_EXT=y
+          CONFIG_USBIP_CORE=y
+          CONFIG_USBIP_VHCI_HCD=y
+          CONFIG_USBIP_HOST=y
+          CONFIG_USB_CONFIGFS_F_RNDIS=y
+          CONFIG_IP_NF_TARGET_TEE=y
 
     - name: Enable BTF
       uses: ./.github/actions/btf

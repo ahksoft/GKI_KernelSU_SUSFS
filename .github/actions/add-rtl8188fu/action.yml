@@ -1,5 +1,5 @@
 name: 'Add RTL8188FU WiFi Driver'
-description: 'Integrate the Realtek RTL8188FTV (rtl8188fu) driver into the kernel tree and enable cfg80211/mac80211 + NetHunter configs'
+description: 'Integrate the Realtek RTL8188FTV (rtl8188fu) driver into the kernel tree and enable cfg80211/mac80211'
 
 inputs:
   version:
