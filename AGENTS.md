@@ -79,10 +79,11 @@ environment/operational rules live in `/AGENTS.md` (container root). Key points:
 The `nethunter` branch builds a full kernel for the phone (`6.1.145-android14-AHK-Fire`) with the RTL8188FTV USB
 WiFi driver and NetHunter configs, instead of relying on the fragile on-device module build:
 
-- `.github/config/android14-6.1.json` is shrunk to **only sublevel 145 @ 2025-08 and 2025-09** (the phone's
-  os_patch_level range; pinned build timestamp `2025-08-05 04:20:00 UTC`). Select
+- `.github/config/android14-6.1.json` currently carries the full upstream android14-6.1 matrix (32 cells,
+  sublevels 25→172 + `lts` + a `TheWildJames` variant; the phone's cells are `145 @ 2025-08` and
+  `145 @ 2025-09`, pinned build timestamp `2025-08-05 04:20:00 UTC`). Select
   `kernel_build_version: android14-6.1` + `feature_set: FULL` on the Actions page of this branch to build
-  just those kernels (each cell builds Normal + Bypass).
+  them (each cell builds Normal + Bypass; a full run is ~11 h).
 - `.github/actions/add-rtl8188fu/` clones `kelebek333/rtl8188fu` (pinned to `c8c9570`, power-saving off,
   monitor on), copies it in-tree to `drivers/net/wireless/realtek/rtl8188fu/` and wires it into the realtek
   Kconfig/Makefile. Five fixes are applied before building:
@@ -100,12 +101,15 @@ WiFi driver and NetHunter configs, instead of relying on the fragile on-device m
      - `include/rtw_recv.h`: `get_rxbuf_desc()`/`pkt_to_recvframe()` returned uninitialized pointers on
        Linux (only assigned inside `#ifdef PLATFORM_WINDOWS`) — now initialized to `NULL`;
      - `hal/phydm/phydm_features.h`: `#define` guard didn't match `#ifndef` guard (`-Wheader-guard`).
-  4. `register_modules.py` registers the NetHunter wireless modules with kleaf
-     (sorted merge into `_COMMON_GKI_MODULES_LIST` in modules.bzl or inline
-     `module_implicit_outs` in BUILD.bazel, auto-detected) so the "built but
-     not copied" check passes. Modules: cfg80211, mac80211, mac80211_hwsim,
-     rtl8188fu plus the in-tree toolbox (ath9k_htc, rt2800usb, rtl8xxxu,
-     mt7601u, rndis_host, cdc_ether, cdc_mbim). Idempotent.
+   4. `register_modules.py` registers the NetHunter wireless modules with kleaf
+      (sorted merge into `_COMMON_GKI_MODULES_LIST` in modules.bzl or the
+      underscore-less `COMMON_GKI_MODULES_LIST` used by android14-6.1 branches
+      up to ~2024-07, or inline `module_implicit_outs` in BUILD.bazel,
+      auto-detected) so the "built but not copied" check passes. Modules:
+      cfg80211, mac80211, mac80211_hwsim, rtl8188fu plus the in-tree toolbox
+      (ath9k_htc/hw/common, rt2800usb, rtl8xxxu, mt7601u, rndis_host,
+      cdc_ether, cdc_mbim, cdc-wdm). Idempotent. On old 6.1 branches the same
+      list variable also feeds `gki_system_dlkm_modules`, so one edit covers it.
   5. `set-kernel-config` (which patches `common/arch/arm64/configs/gki_defconfig`) flips on:
   `CONFIG_WLAN_VENDOR_REALTEK=y` (required: `obj-$(CONFIG_WLAN_VENDOR_REALTEK)` in `drivers/net/wireless/Makefile`
   gates descent into `realtek/`), `CONFIG_RTL8188FU=m`, `CONFIG_CFG80211=m`, `CONFIG_NL80211_TESTMODE=y`,
@@ -116,12 +120,17 @@ WiFi driver and NetHunter configs, instead of relying on the fragile on-device m
   NetHunter bits the GKI defconfig lacks: `CONFIG_WIRELESS_EXT=y` (legacy WEXT ioctls for monitor-mode
   tooling; safe alongside `CFG80211=m`), `CONFIG_USBIP_CORE=y`/`CONFIG_USBIP_VHCI_HCD=y`/`CONFIG_USBIP_HOST=y`
   (USB/IP), `CONFIG_USB_CONFIGFS_F_RNDIS=y` (RNDIS gadget), `CONFIG_IP_NF_TARGET_TEE=y` (classic
-  `iptables -j TEE`), plus the in-tree wireless toolbox as modules: `CONFIG_ATH9K_HTC=m` (USB 9271),
+  `iptables -j TEE`), the in-tree wireless toolbox as modules: `CONFIG_ATH9K_HTC=m` (USB 9271),
   `CONFIG_RT2800USB=m` (rt2x00 USB), `CONFIG_RTL8XXXU=m` + `CONFIG_RTL8XXXU_UNTESTED=y` (in-tree generic
   8188/8192/8723/8811/8812/8821, incl. the 8188FU chip), `CONFIG_MT7601U=m`, `CONFIG_USB_NET_RNDIS_HOST=m`,
-  `CONFIG_USB_NET_CDC_ETHER=m`, `CONFIG_USB_NET_CDC_MBIM=m`. `set-kernel-config` appends to `gki_defconfig`;
-  `olddefconfig` silently drops any symbol that does not exist on a given kernel version, so the same list
-  is safe for 5.10→6.12. All in-tree toolbox modules are registered (kleaf) and extracted into the zip.
+  `CONFIG_USB_NET_CDC_ETHER=m`, `CONFIG_USB_NET_CDC_MBIM=m` (+ `CONFIG_USB_WDM=m`, selected by the CDC
+  drivers, so cdc-wdm.ko is built deterministically), and the `CONFIG_WLAN_VENDOR_ATH=y` /
+  `CONFIG_WLAN_VENDOR_MEDIATEK=y` / `CONFIG_WLAN_VENDOR_RALINK=y` gates — REQUIRED: without them the whole
+  ath9k/mediatek/ralink Kconfig subtrees are invisible and `olddefconfig` silently drops ATH9K_HTC,
+  RT2800USB and MT7601U (`WLAN_VENDOR_REALTEK=y` is already set by add-rtl8188fu). `set-kernel-config`
+  appends to `gki_defconfig`; `olddefconfig` silently drops any symbol that does not exist on a given kernel
+  version, so the same list is safe for 5.10→6.12. All in-tree toolbox modules are registered (kleaf) and
+  extracted into the zip.
 - The action + module-extraction step run for **all** versions. kleaf versions register the modules in
   `modules.bzl` (`_COMMON_GKI_MODULES_LIST`, anchors `usbnet.ko`/`l2tp_ppp.ko`/`tipc.ko` — present on
   android14-5.15, android14-6.1, android15-6.6, android16-6.12) or inline `module_implicit_outs` in

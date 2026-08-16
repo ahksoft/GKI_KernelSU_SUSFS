@@ -219,11 +219,15 @@ jobs:
           CONFIG_USBIP_HOST=y
           CONFIG_USB_CONFIGFS_F_RNDIS=y
           CONFIG_IP_NF_TARGET_TEE=y
+          CONFIG_WLAN_VENDOR_ATH=y
+          CONFIG_WLAN_VENDOR_MEDIATEK=y
+          CONFIG_WLAN_VENDOR_RALINK=y
           CONFIG_ATH9K_HTC=m
           CONFIG_RT2800USB=m
           CONFIG_RTL8XXXU=m
           CONFIG_RTL8XXXU_UNTESTED=y
           CONFIG_MT7601U=m
+          CONFIG_USB_WDM=m
           CONFIG_USB_NET_RNDIS_HOST=m
           CONFIG_USB_NET_CDC_ETHER=m
           CONFIG_USB_NET_CDC_MBIM=m
@@ -442,6 +446,7 @@ jobs:
         done <<'EOF'
         drivers/net/usb/cdc_ether.ko|cdc_ether.ko
         drivers/net/usb/cdc_mbim.ko|cdc_mbim.ko
+        drivers/usb/class/cdc-wdm.ko|cdc-wdm.ko
         drivers/net/usb/rndis_host.ko|rndis_host.ko
         drivers/net/wireless/ath/ath9k/ath9k_common.ko|ath9k_common.ko
         drivers/net/wireless/ath/ath9k/ath9k_htc.ko|ath9k_htc.ko

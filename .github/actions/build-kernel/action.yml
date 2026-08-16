@@ -71,7 +71,7 @@ runs:
           # kleaf registers every declared output file as its own output group
           # named by the module path. Request them so the .ko files are
           # materialized in bazel-bin and build.yml can extract rtl8188fu.ko.
-          OUTGROUPS="--output_groups=+default,drivers/net/usb/cdc_ether.ko,drivers/net/usb/cdc_mbim.ko,drivers/net/usb/rndis_host.ko,drivers/net/wireless/ath/ath9k/ath9k_common.ko,drivers/net/wireless/ath/ath9k/ath9k_htc.ko,drivers/net/wireless/ath/ath9k/ath9k_hw.ko,drivers/net/wireless/mac80211_hwsim.ko,drivers/net/wireless/mediatek/mt7601u/mt7601u.ko,drivers/net/wireless/ralink/rt2x00/rt2800lib.ko,drivers/net/wireless/ralink/rt2x00/rt2800usb.ko,drivers/net/wireless/ralink/rt2x00/rt2x00lib.ko,drivers/net/wireless/ralink/rt2x00/rt2x00usb.ko,drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu.ko,drivers/net/wireless/realtek/rtl8188fu/rtl8188fu.ko,net/mac80211/mac80211.ko,net/wireless/cfg80211.ko"
+          OUTGROUPS="--output_groups=+default,drivers/net/usb/cdc_ether.ko,drivers/net/usb/cdc_mbim.ko,drivers/net/usb/rndis_host.ko,drivers/usb/class/cdc-wdm.ko,drivers/net/wireless/ath/ath9k/ath9k_common.ko,drivers/net/wireless/ath/ath9k/ath9k_htc.ko,drivers/net/wireless/ath/ath9k/ath9k_hw.ko,drivers/net/wireless/mac80211_hwsim.ko,drivers/net/wireless/mediatek/mt7601u/mt7601u.ko,drivers/net/wireless/ralink/rt2x00/rt2800lib.ko,drivers/net/wireless/ralink/rt2x00/rt2800usb.ko,drivers/net/wireless/ralink/rt2x00/rt2x00lib.ko,drivers/net/wireless/ralink/rt2x00/rt2x00usb.ko,drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu.ko,drivers/net/wireless/realtek/rtl8188fu/rtl8188fu.ko,net/mac80211/mac80211.ko,net/wireless/cfg80211.ko"
         else
           TARGET="//common:kernel_aarch64/Image"
           OUTGROUPS=""

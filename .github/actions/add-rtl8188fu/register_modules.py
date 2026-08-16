@@ -11,8 +11,12 @@ mac80211_hwsim, rtl8188fu and the in-tree NetHunter wireless toolbox) into
 whichever form the checked-out kernel uses, keeping the list sorted.
 
 Handled layouts:
-  * modules.bzl with _COMMON_GKI_MODULES_LIST (android14-5.15, android14-6.1,
-    android15-6.6, android16-6.12, android17-6.18): sorted merge.
+  * modules.bzl with _COMMON_GKI_MODULES_LIST (android14-5.15, android14-6.1
+    2024-08+ and 2025+, android15-6.6, android16-6.12, android17-6.18) or
+    COMMON_GKI_MODULES_LIST without the underscore (android14-6.1 up to
+    2024-07): sorted merge. Old branches feed both module_implicit_outs and
+    gki_system_dlkm_modules from this variable, so a single list edit covers
+    the whole build.
   * BUILD.bazel with inline "module_implicit_outs": [...] lists
     (android13-5.15): sorted merge into every such list.
   * Neither (android12/13-5.10 legacy build.sh): nothing to do.
@@ -28,6 +32,7 @@ ADDS = [
     "drivers/net/usb/cdc_ether.ko",
     "drivers/net/usb/cdc_mbim.ko",
     "drivers/net/usb/rndis_host.ko",
+    "drivers/usb/class/cdc-wdm.ko",
     "drivers/net/wireless/ath/ath9k/ath9k_common.ko",
     "drivers/net/wireless/ath/ath9k/ath9k_htc.ko",
     "drivers/net/wireless/ath/ath9k/ath9k_hw.ko",
@@ -46,7 +51,7 @@ ADDS = [
 MARKER = "rtl8188fu.ko"
 
 _MODULE_LIST_RE = re.compile(
-    r'(_COMMON_GKI_MODULES_LIST\s*=\s*\[)(.*?)(\n\])', re.DOTALL
+    r'(_?COMMON_GKI_MODULES_LIST\s*=\s*\[)(.*?)(\n\])', re.DOTALL
 )
 _IMPLICIT_OUTS_RE = re.compile(
     r'(module_implicit_outs"\s*:\s*\[)(.*?)(\n\s*\],)', re.DOTALL
