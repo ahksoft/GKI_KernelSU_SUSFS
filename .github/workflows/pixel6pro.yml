@@ -29,7 +29,7 @@ on:
         default: ''
         type: string
       kernel_branch:
-        description: 'AHK_kernal_gs branch'
+        description: 'AHK_knal_gs branch'
         required: false
         default: 'blu_spark-17'
         type: string
@@ -74,25 +74,20 @@ jobs:
       working-directory: ${{ github.workspace }}
       run: |
         set -euo pipefail
-        echo "=== Cloning AHK_kernal_gs (${{ inputs.kernel_branch }}) ==="
+        echo "=== Cloning AHK_knal_gs (${{ inputs.kernel_branch }}) ==="
+        mkdir -p kernel
+        echo "${{ github.token }}" | gh auth login --with-token
+        gh auth setup-git
         git clone --depth 1 \
           -b "${{ inputs.kernel_branch }}" \
           https://github.com/ahksoft/AHK_kernal_gs.git \
-          kernel
-        cd kernel
+          kernel/common
 
-        # Verify kernel version
+        cd kernel/common
         KVER=$(grep -m1 '^VERSION' Makefile | awk '{print $3}')
         KPATCH=$(grep -m1 '^PATCHLEVEL' Makefile | awk '{print $3}')
         KSUBLEVEL=$(grep -m1 '^SUBLEVEL' Makefile | awk '{print $3}')
         echo "Kernel version: ${KVER}.${KPATCH}.${KSUBLEVEL}"
-
-        # AHK_kernal_gs has flat layout (kernel source at root).
-        # Create 'common' symlink so existing actions work unchanged.
-        # kernel/common/ -> kernel/ (the symlink target)
-        ln -s . common
-        test -f common/Makefile && echo "✓ common/ symlink works"
-        test -f common/arch/arm64/configs/gki_defconfig && echo "✓ gki_defconfig accessible via common/"
 
     - name: Set Build Timestamp
       shell: bash
@@ -105,7 +100,6 @@ jobs:
         GIT_DATE=$(date -u -d @${SOURCE_DATE_EPOCH} '+%Y-%m-%dT%H:%M:%SZ')
         echo "GIT_COMMITTER_DATE=${GIT_DATE}" >> $GITHUB_ENV
         echo "GIT_AUTHOR_DATE=${GIT_DATE}" >> $GITHUB_ENV
-        echo "Build timestamp: $(date -u -d @${SOURCE_DATE_EPOCH} '+%Y-%m-%d %H:%M:%S UTC')"
 
     - name: Kernel Fixes
       uses: ./.github/actions/kernel-fixes
@@ -209,43 +203,87 @@ jobs:
       uses: ./.github/actions/remove-protected-exports
 
     - name: Clean Kernel Flags
-      uses: ./.github/actions/clean-kernel-flags
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        set -euo pipefail
+        if [ -f "scripts/setlocalversion" ]; then
+          sed -i 's/-dirty//' scripts/setlocalversion
+        fi
+        git add -A
+        git diff --cached --quiet || git commit -m "Wild: Clean Dirty Flag" || true
 
-    - name: Initialize Config Fragment
-      run: touch "${{ github.workspace }}/wild_gki.fragment"
-
-    - name: Build Kernel (Normal)
+    - name: Build Kernel
       env:
         SOURCE_DATE_EPOCH: ${{ env.SOURCE_DATE_EPOCH }}
         KBUILD_BUILD_TIMESTAMP: ${{ env.KBUILD_BUILD_TIMESTAMP }}
-      uses: ./.github/actions/build-kernel
-      with:
-        version: android14-6.1
-        bypass: false
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        set -euo pipefail
+        echo "=== Building kernel with make ==="
 
-    - name: Build Kernel (Bypass)
-      env:
-        SOURCE_DATE_EPOCH: ${{ env.SOURCE_DATE_EPOCH }}
-        KBUILD_BUILD_TIMESTAMP: ${{ env.KBUILD_BUILD_TIMESTAMP }}
-      uses: ./.github/actions/build-kernel
-      with:
-        version: android14-6.1
-        bypass: true
+        # Install gcc cross-compiler and build deps (free-disk-space removed *llvm*)
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libelf-dev libssl-dev flex bison bc
+
+        # AHK_kernal_gs hardcodes CROSS_COMPILE and KBUILD_OUTPUT in Makefile.
+        # Override them: clear KBUILD_OUTPUT (use in-tree build), set CROSS_COMPILE.
+        sed -i 's|^KBUILD_OUTPUT :=.*|KBUILD_OUTPUT :=|' Makefile
+        sed -i 's|^CROSS_COMPILE.*?=.*|CROSS_COMPILE ?= aarch64-linux-gnu-|' Makefile
+
+        # Verify overrides
+        grep '^KBUILD_OUTPUT' Makefile
+        grep '^CROSS_COMPILE' Makefile
+
+        export KCFLAGS="-O2 -Wno-error=unused-value"
+
+        # Apply the defconfig
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- gki_defconfig
+
+        # Disable BTF — pahole removed by free-disk-space, not needed for this build
+        scripts/config --file .config -d DEBUG_INFO_BTF
+        scripts/config --file .config -d DEBUG_INFO_BTF_MODULES
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+
+        # Build kernel image and modules
+        set +e
+        make -j$(nproc) ARCH=arm64 \
+          LOCALVERSION= \
+          CROSS_COMPILE=aarch64-linux-gnu- \
+          Image modules 2>&1 | tee /tmp/build.log
+        BUILD_RC=$?
+        set -e
+
+        if [ $BUILD_RC -ne 0 ]; then
+          echo "::error::Kernel build failed (exit code $BUILD_RC)"
+          echo "=== Last 300 lines of build log ==="
+          tail -300 /tmp/build.log
+          exit $BUILD_RC
+        fi
+
+        echo "=== Build complete ==="
+        ls -lh arch/arm64/boot/Image 2>/dev/null || echo "Image not found at arch/arm64/boot/Image"
+        ls -lh arch/arm64/boot/Image.gz 2>/dev/null || true
 
     - name: Extract Modules
       shell: bash
       working-directory: ${{ github.workspace }}
       run: |
         set -uo pipefail
-        BIN="${{ github.workspace }}/kernel/bazel-bin"
+        KSRC="${{ github.workspace }}/kernel/common"
         A3="${{ github.workspace }}/AnyKernel3"
 
         cp_module() {
           local rel="$1" out="$2"
-          local p="$BIN/common/kernel_aarch64/$rel"
-          if [ ! -f "$p" ]; then
-            p="$(find -L "$BIN" "${{ github.workspace }}/kernel/bazel-out" /home/runner/out -type f -path "*${rel}" 2>/dev/null | head -n1 || true)"
-          fi
+          local p=""
+          # Search in multiple locations
+          for dir in "$KSRC" "$KSRC/out" /home/runner/out; do
+            if [ -f "$dir/$rel" ]; then
+              p="$dir/$rel"
+              break
+            fi
+          done
           if [ -n "${p:-}" ] && [ -f "$p" ]; then
             cp "$p" "$out"
             echo "copied ${rel} from $p"
@@ -280,6 +318,16 @@ jobs:
 
         echo "=== Extracted modules ==="
         ls -l "$A3/"*.ko 2>/dev/null || true
+
+        # Copy Image to AnyKernel3
+        for img in "$KSRC/arch/arm64/boot/Image" "$KSRC/out/arch/arm64/boot/Image"; do
+          if [ -f "$img" ]; then
+            cp "$img" "$A3/Image"
+            echo "Copied Image from $img"
+            break
+          fi
+        done
+        ls -lh "$A3/Image" 2>/dev/null || echo "::warning::Image not found"
 
     - name: Upload Build Summary
       if: ${{ always() }}
