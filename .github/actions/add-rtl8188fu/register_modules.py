@@ -33,6 +33,7 @@ ADDS = [
     "drivers/net/usb/cdc_mbim.ko",
     "drivers/net/usb/rndis_host.ko",
     "drivers/usb/class/cdc-wdm.ko",
+    "drivers/net/wireless/ath/ath.ko",
     "drivers/net/wireless/ath/ath9k/ath9k_common.ko",
     "drivers/net/wireless/ath/ath9k/ath9k_htc.ko",
     "drivers/net/wireless/ath/ath9k/ath9k_hw.ko",
